@@ -1,0 +1,19 @@
+{
+  "id": "./DailyDo.html",
+  "name": "DailyDo - My Tasks",
+  "short_name": "DailyDo",
+  "description": "A simple, professional daily task manager.",
+  "start_url": "./DailyDo.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#101116",
+  "theme_color": "#101116",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -1,0 +1,189 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101116">
+<meta name="description" content="DailyDo - your simple daily task manager">
+<link rel="manifest" href="./manifest.webmanifest">
+<title>DailyDo - My Tasks</title>
+<style>
+:root{color-scheme:dark;--bg:#101116;--panel:#191b24;--text:#f5f5fa;--muted:#a3a6b8;--accent:#a78bfa;--border:#303240}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px Arial,sans-serif}
+main{width:min(760px,100%);margin:auto;padding:24px 16px 48px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px}
+h1{margin:0;font-size:32px}h1 span{color:var(--accent)}
+p{color:var(--muted)}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:18px;margin-top:18px}
+input,select,button{font:inherit;border-radius:10px;padding:12px;border:1px solid var(--border)}
+input,select{background:#11131a;color:var(--text);min-width:0;width:100%}
+button{background:var(--accent);color:#171321;border:0;font-weight:bold;cursor:pointer}
+button.secondary{background:#303240;color:var(--text)}
+.addgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.addgrid .full{grid-column:1/-1}
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.filters button{flex:1}
+.filters button.active{background:#d7c7ff}
+.progress{height:8px;background:#303240;border-radius:8px;overflow:hidden;margin-top:10px}
+#progressFill{height:100%;width:0;background:var(--accent);transition:width .2s}
+.task{display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid var(--border)}
+.task:last-child{border-bottom:0}
+.task input[type=checkbox]{width:20px;height:20px;margin-top:2px;accent-color:var(--accent)}
+.taskcontent{flex:1;min-width:0;overflow-wrap:anywhere}
+.tasktitle{font-weight:bold}.done .tasktitle{text-decoration:line-through;color:var(--muted)}
+.meta{font-size:13px;color:var(--muted);margin-top:6px}
+.actions{display:flex;gap:6px}.actions button{padding:8px;font-size:13px}
+.empty{text-align:center;padding:24px;color:var(--muted)}
+.small{font-size:13px}
+@media(max-width:460px){h1{font-size:27px}.addgrid{grid-template-columns:1fr}.addgrid .full{grid-column:auto}.task{gap:8px}.actions{flex-direction:column}}
+</style>
+</head>
+<body>
+<main>
+<header>
+<div><h1>Daily<span>Do</span></h1><p>One day. One step at a time.</p></div>
+<button id="installBtn" class="secondary" hidden>Install app</button>
+</header>
+
+<section class="panel">
+<h2>Add a task</h2>
+<form id="taskForm" class="addgrid">
+<input class="full" id="taskInput" placeholder="What do you need to do?" maxlength="180" required>
+<select id="priority" aria-label="Priority">
+<option value="Normal">Normal priority</option>
+<option value="High">High priority</option>
+<option value="Low">Low priority</option>
+</select>
+<input id="dueDate" type="date" aria-label="Due date">
+<button class="full" type="submit">+ Add task</button>
+</form>
+</section>
+
+<section class="panel">
+<div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
+<div><strong id="progressText">0 of 0 completed</strong><p class="small" id="progressHint">Start with one small task.</p></div>
+<strong id="progressPercent">0%</strong>
+</div>
+<div class="progress"><div id="progressFill"></div></div>
+<div class="filters">
+<button class="active" data-filter="All">All</button>
+<button class="secondary" data-filter="Today">Today</button>
+<button class="secondary" data-filter="Pending">Pending</button>
+<button class="secondary" data-filter="Completed">Completed</button>
+</div>
+<input id="search" style="margin-top:14px" placeholder="Search your tasks..." aria-label="Search tasks">
+<div id="taskList"></div>
+</section>
+<p class="small" style="text-align:center">DailyDo · Your tasks are saved on this device.</p>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const STORAGE_KEY = "dailydo-tasks-v1";
+let tasks = [];
+let currentFilter = "All";
+try {
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+  if (Array.isArray(saved)) tasks = saved;
+} catch (e) {}
+const today = () => new Date().toLocaleDateString("en-CA");
+const save = () => {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); }
+  catch (e) { alert("Your browser could not save tasks."); }
+};
+const escapeHTML = value => String(value).replace(/[&<>"']/g, ch => ({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+}[ch]));
+function render() {
+  const completed = tasks.filter(t => t.completed).length;
+  const percent = tasks.length ? Math.round(completed / tasks.length * 100) : 0;
+  $("progressText").textContent = `${completed} of ${tasks.length} completed`;
+  $("progressPercent").textContent = percent + "%";
+  $("progressFill").style.width = percent + "%";
+  $("progressHint").textContent = tasks.length
+    ? (percent === 100 ? "Amazing! All tasks completed." : "Keep going, you're making progress.")
+    : "Start with one small task.";
+  const query = $("search").value.trim().toLowerCase();
+  const visible = tasks.filter(t => {
+    const matchesFilter = currentFilter === "All" ||
+      (currentFilter === "Today" && t.date === today()) ||
+      (currentFilter === "Pending" && !t.completed) ||
+      (currentFilter === "Completed" && t.completed);
+    return matchesFilter && t.title.toLowerCase().includes(query);
+  });
+  $("taskList").innerHTML = visible.length ? visible.map(t => `
+    <div class="task ${t.completed ? "done" : ""}">
+      <input type="checkbox" aria-label="Complete task" data-action="toggle" data-id="${escapeHTML(t.id)}" ${t.completed ? "checked" : ""}>
+      <div class="taskcontent">
+        <div class="tasktitle">${escapeHTML(t.title)}</div>
+        <div class="meta">${escapeHTML(t.priority)} priority${t.date ? " · Due " + escapeHTML(t.date) : ""}</div>
+      </div>
+      <div class="actions">
+        <button class="secondary" data-action="edit" data-id="${escapeHTML(t.id)}">Edit</button>
+        <button class="secondary" data-action="delete" data-id="${escapeHTML(t.id)}">Delete</button>
+      </div>
+    </div>`).join("") : `<div class="empty">${tasks.length ? "No tasks match this view." : "No tasks yet. Add your first task above!"}</div>`;
+  document.querySelectorAll("[data-filter]").forEach(btn => {
+    const active = btn.dataset.filter === currentFilter;
+    btn.classList.toggle("active", active);
+    btn.classList.toggle("secondary", !active);
+  });
+}
+$("taskForm").addEventListener("submit", event => {
+  event.preventDefault();
+  const title = $("taskInput").value.trim();
+  if (!title) return;
+  tasks.unshift({
+    id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random())),
+    title, priority: $("priority").value,
+    date: $("dueDate").value, completed: false
+  });
+  save(); render(); $("taskForm").reset(); $("taskInput").focus();
+});
+$("taskList").addEventListener("click", event => {
+  const control = event.target.closest("[data-action]");
+  if (!control) return;
+  const task = tasks.find(t => t.id === control.dataset.id);
+  if (!task) return;
+  if (control.dataset.action === "toggle") {
+    task.completed = control.checked;
+  } else if (control.dataset.action === "delete") {
+    if (!confirm("Delete this task?")) return;
+    tasks = tasks.filter(t => t.id !== task.id);
+  } else if (control.dataset.action === "edit") {
+    const updated = prompt("Edit task:", task.title);
+    if (updated === null) return;
+    if (!updated.trim()) { alert("Task name cannot be empty."); return; }
+    task.title = updated.trim();
+  }
+  save(); render();
+});
+document.querySelectorAll("[data-filter]").forEach(btn => {
+  btn.addEventListener("click", () => { currentFilter = btn.dataset.filter; render(); });
+});
+$("search").addEventListener("input", render);
+
+let installPrompt;
+window.addEventListener("beforeinstallprompt", event => {
+  event.preventDefault();
+  installPrompt = event;
+  $("installBtn").hidden = false;
+});
+$("installBtn").addEventListener("click", async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  await installPrompt.userChoice;
+  installPrompt = null;
+  $("installBtn").hidden = true;
+});
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(console.error);
+  });
+}
+render();
+</script>
+</body>
+</html>
